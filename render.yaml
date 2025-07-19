@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: assistant-calendar-wrapper
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port 8000"
+    envVars:
+      - key: CLIENT_ID
+        sync: false
+      - key: CLIENT_SECRET
+        sync: false
+      - key: REDIRECT_URI
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: TARGET_CALENDAR_ID
+        sync: false
