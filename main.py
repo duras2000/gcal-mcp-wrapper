@@ -46,7 +46,10 @@ def callback(request: Request, code: str):
 
 @app.get("/tools/check_availability")
 def check_availability(request: Request):
-    access_token = request.session.get("access_token")
+    access_token = (
+    request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    or request.session.get("access_token")
+    )
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
@@ -66,7 +69,10 @@ def check_availability(request: Request):
 
 @app.post("/tools/create_event")
 async def create_event(request: Request):
-    access_token = request.session.get("access_token")
+    access_token = (
+    request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    or request.session.get("access_token")
+    )
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
