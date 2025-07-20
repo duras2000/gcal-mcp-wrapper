@@ -74,10 +74,16 @@ async def create_event(request: Request):
         or request.session.get("access_token")
     )
     if not access_token:
+        print("❌ No access token found")
         return {"error": "Not authorized. Please visit /authorize."}
 
     data = await request.json()
+
+    print("\n📥 Incoming request data:")
+    print(json.dumps(data, indent=2))
+    
     calendar_id = os.environ.get("TARGET_CALENDAR_ID", "primary")
+    print(f"📛 Using calendar ID: {calendar_id}")
     attendee_objs = []
     for entry in data.get("attendees", []):
         if isinstance(entry, str):
@@ -97,6 +103,10 @@ async def create_event(request: Request):
         },
         "attendees": attendee_objs
     }
+
+    print("\n📤 Sending event data to Google:")
+    print(json.dumps(event_data, indent=2))
+    
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
