@@ -109,7 +109,8 @@ async def create_event(request: Request):
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
-    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events?sendUpdates=all"
+
     response = requests.post(url, headers=headers, json=event_data)
     return response.json()
 
@@ -199,7 +200,8 @@ async def mcp_query(request: Request, payload: dict = Body(...)):
             },
             "attendees": attendee_objs
         }
-        url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+        url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events?sendUpdates=all"
+
         response = requests.post(url, headers=headers, json=event_data)
         return response.json()
 
