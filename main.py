@@ -5,6 +5,8 @@ import os
 import requests
 from urllib.parse import urlencode
 from datetime import datetime, timedelta
+from token_manager import get_access_token
+
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET", "supersecret"))
@@ -46,10 +48,8 @@ def callback(request: Request, code: str):
 
 @app.get("/tools/check_availability")
 def check_availability(request: Request):
-    access_token = (
-        request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        or request.session.get("access_token")
-    )
+    access_token = get_access_token()
+
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
@@ -69,10 +69,8 @@ def check_availability(request: Request):
 
 @app.post("/tools/create_event")
 async def create_event(request: Request):
-    access_token = (
-        request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        or request.session.get("access_token")
-    )
+    access_token = get_access_token()
+    
     if not access_token:
         print("❌ No access token found")
         return {"error": "Not authorized. Please visit /authorize."}
@@ -157,10 +155,8 @@ async def mcp_query(request: Request, payload: dict = Body(...)):
     tool = payload.get("tool")
     input_data = payload.get("input", {})
 
-    access_token = (
-        request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        or request.session.get("access_token")
-    )
+    access_token = get_access_token()
+    
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
