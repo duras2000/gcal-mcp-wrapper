@@ -1,3 +1,4 @@
+from fastapi import Body
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
@@ -97,3 +98,91 @@ async def create_event(request: Request):
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     response = requests.post(url, headers=headers, json=event_data)
     return response.json()
+
+@app.get("/mcp/manifest")
+def manifest():
+    return {
+        "name": "gcal_mcp_wrapper",
+        "description": "Assistant tool that can check calendar availability and schedule meetings.",
+        "tools": [
+            {
+                "name": "check_availability",
+                "description": "Returns a list of upcoming events in the calendar for the next 24 hours.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            {
+                "name": "create_event",
+                "description": "Creates a new calendar event.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {"type": "string"},
+                        "start": {"type": "string", "description": "RFC3339 datetime string (e.g., 2025-07-20T14:00:00Z)"},
+                        "end": {"type": "string", "description": "RFC3339 datetime string (e.g., 2025-07-20T14:30:00Z)"},
+                        "attendees": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Email addresses of the attendees"
+                        }
+                    },
+                    "required": ["summary", "start", "end"]
+                }
+            }
+        ]
+    }
+
+@app.post("/mcp/query")
+async def mcp_query(request: Request, payload: dict = Body(...)):
+    tool = payload.get("tool")
+    input_data = payload.get("input", {})
+
+    # Pull token from header or session
+    access_token = (
+        request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        or request.session.get("access_token")
+    )
+    if not access_token:
+        return {"error": "Not authorized. Please visit /authorize."}
+
+    calendar_id = os.environ.get("TARGET_CALENDAR_ID")
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    if tool == "check_availability":
+        now = datetime.utcnow().isoformat() + 'Z'
+        later = (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
+        params = {
+            "timeMin": now,
+            "timeMax": later,
+            "singleEvents": True,
+            "orderBy": "startTime"
+        }
+        url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+        response = requests.get(url, headers=headers, params=params)
+        return response.json()
+
+    elif tool == "create_event":
+        event_data = {
+            "summary": input_data.get("summary", "Meeting"),
+            "start": {
+                "dateTime": input_data["start"],
+                "timeZone": "UTC"
+            },
+            "end": {
+                "dateTime": input_data["end"],
+                "timeZone": "UTC"
+            },
+            "attendees": [{"email": email} for email in input_data.get("attendees", [])]
+        }
+        url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+        response = requests.post(url, headers=headers, json=event_data)
+        return response.json()
+
+    else:
+        return {"error": f"Tool '{tool}' not recognized"}
