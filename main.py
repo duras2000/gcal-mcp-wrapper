@@ -1,5 +1,4 @@
-from fastapi import Body
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 import os
@@ -14,7 +13,6 @@ CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 REDIRECT_URI = os.environ["REDIRECT_URI"]
 SCOPES = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar"
-
 
 @app.get("/")
 def home():
@@ -49,13 +47,13 @@ def callback(request: Request, code: str):
 @app.get("/tools/check_availability")
 def check_availability(request: Request):
     access_token = (
-    request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    or request.session.get("access_token")
+        request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        or request.session.get("access_token")
     )
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
-    calendar_id = os.environ.get("TARGET_CALENDAR_ID")
+    calendar_id = os.environ.get("TARGET_CALENDAR_ID", "primary")
     now = datetime.utcnow().isoformat() + 'Z'
     later = (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
@@ -72,25 +70,32 @@ def check_availability(request: Request):
 @app.post("/tools/create_event")
 async def create_event(request: Request):
     access_token = (
-    request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    or request.session.get("access_token")
+        request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        or request.session.get("access_token")
     )
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
     data = await request.json()
-    calendar_id = os.environ.get("TARGET_CALENDAR_ID")
+    calendar_id = os.environ.get("TARGET_CALENDAR_ID", "primary")
+    attendee_objs = []
+    for entry in data.get("attendees", []):
+        if isinstance(entry, str):
+            attendee_objs.append({"email": entry})
+        elif isinstance(entry, dict) and "email" in entry:
+            attendee_objs.append(entry)
+
     event_data = {
         "summary": data.get("summary", "Meeting"),
         "start": {
             "dateTime": data["start"],
-            "timeZone": "UTC"
+            "timeZone": data.get("timezone", "UTC")
         },
         "end": {
             "dateTime": data["end"],
-            "timeZone": "UTC"
+            "timeZone": data.get("timezone", "UTC")
         },
-        "attendees": [{"email": email} for email in data.get("attendees", [])]
+        "attendees": attendee_objs
     }
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -122,13 +127,14 @@ def manifest():
                     "type": "object",
                     "properties": {
                         "summary": {"type": "string"},
-                        "start": {"type": "string", "description": "RFC3339 datetime string (e.g., 2025-07-20T14:00:00Z)"},
-                        "end": {"type": "string", "description": "RFC3339 datetime string (e.g., 2025-07-20T14:30:00Z)"},
+                        "start": {"type": "string", "description": "RFC3339 datetime string"},
+                        "end": {"type": "string", "description": "RFC3339 datetime string"},
                         "attendees": {
                             "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Email addresses of the attendees"
-                        }
+                            "items": {"type": "object"},
+                            "description": "List of attendees with optional email and responseStatus"
+                        },
+                        "timezone": {"type": "string"}
                     },
                     "required": ["summary", "start", "end"]
                 }
@@ -141,7 +147,6 @@ async def mcp_query(request: Request, payload: dict = Body(...)):
     tool = payload.get("tool")
     input_data = payload.get("input", {})
 
-    # Pull token from header or session
     access_token = (
         request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         or request.session.get("access_token")
@@ -149,7 +154,7 @@ async def mcp_query(request: Request, payload: dict = Body(...)):
     if not access_token:
         return {"error": "Not authorized. Please visit /authorize."}
 
-    calendar_id = os.environ.get("TARGET_CALENDAR_ID")
+    calendar_id = os.environ.get("TARGET_CALENDAR_ID", "primary")
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
@@ -169,17 +174,24 @@ async def mcp_query(request: Request, payload: dict = Body(...)):
         return response.json()
 
     elif tool == "create_event":
+        attendee_objs = []
+        for entry in input_data.get("attendees", []):
+            if isinstance(entry, str):
+                attendee_objs.append({"email": entry})
+            elif isinstance(entry, dict) and "email" in entry:
+                attendee_objs.append(entry)
+
         event_data = {
             "summary": input_data.get("summary", "Meeting"),
             "start": {
                 "dateTime": input_data["start"],
-                "timeZone": "UTC"
+                "timeZone": input_data.get("timezone", "UTC")
             },
             "end": {
                 "dateTime": input_data["end"],
-                "timeZone": "UTC"
+                "timeZone": input_data.get("timezone", "UTC")
             },
-            "attendees": [{"email": email} for email in input_data.get("attendees", [])]
+            "attendees": attendee_objs
         }
         url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
         response = requests.post(url, headers=headers, json=event_data)
