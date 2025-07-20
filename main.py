@@ -13,7 +13,8 @@ app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET"
 CLIENT_ID = os.environ["CLIENT_ID"]
 CLIENT_SECRET = os.environ["CLIENT_SECRET"]
 REDIRECT_URI = os.environ["REDIRECT_URI"]
-SCOPES = "https://www.googleapis.com/auth/calendar"
+SCOPES = "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar"
+
 
 @app.get("/")
 def home():
